@@ -1,0 +1,7 @@
+CREATE TABLE IF NOT EXISTS game (
+  game_id INT NOT NULL AUTO_INCREMENT,
+  player1 VARCHAR(255) NOT NULL,
+  player2 VARCHAR(255) NOT NULL,
+  game_state VARCHAR(255) NOT NULL,
+  PRIMARY KEY (game_id)
+);
