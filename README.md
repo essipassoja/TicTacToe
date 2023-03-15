@@ -1,4 +1,4 @@
-To run the game you need to have a MySQL server on called TicTacToe and Docker installed.
+To run the game you need to have a MySQL server called TicTacToe and Docker installed.
 
 Run the commands:
 
