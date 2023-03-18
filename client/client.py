@@ -6,6 +6,7 @@ import socket
 import threading
 from tkinter import *
 import mysql.connector
+from mysql.connector import Error
 
 HOST = "server"
 PORT = 5000
@@ -18,6 +19,7 @@ class Client:
         self.photo = None
         self.player = None
         self.socket = None
+        self.transaction_in_progress = False
 
         # Initialize GUI
         self.root = Tk()
@@ -123,15 +125,17 @@ class Client:
         s.connect((HOST, PORT))
         return s
     
-    def send_message_to_server(self, command):
-        print("Sending command '{}' to server.".format(command))
+    def send_message_to_server(self, message, wait_response=True):
+        print("Sending message '{}' to server.".format(message))
         s = self.connect_to_server()
-        s.sendall(command.encode())
-        response = s.recv(1024).decode()
+        s.sendall(message.encode())
+        if wait_response:
+            response = s.recv(1024).decode()
+            s.close()
+            if response:
+                print("Received a response from server: {}".format(response))
+                return response
         s.close()
-        if response:
-            print("Received a response from server: {}".format(response))
-            return response
         return ""
 
     def get_player_role(self):
@@ -139,8 +143,11 @@ class Client:
         self.player = player_role
 
     def send_prepare_command_to_server(self, location):
+        if not self.transaction_in_progress:
+            self.start_transaction()
         self.send_message_to_server(
-            "prepare {} -> {}".format(self.player, location))
+            "prepare {} -> {}".format(self.player, location), 
+            wait_response=False)
     
     def send_commit_command_to_server(self):
         self.send_message_to_server("commit")
@@ -153,17 +160,25 @@ class Client:
         while True:
             message = self.socket.recv(1024).decode()
             if message:
-                print("Received a message from server: {}".format(message))
+                print("Received a message from "
+                      "server: {}".format(message))
                 self.handle_message(message)
     
     def handle_message(self, message):
         if message == "Request to prepare":
-            # TODO: When is this no?
-            self.send_message_to_server("yes")
+            self.send_message_to_server("Prepared", wait_response=False)
         elif message == "prepared":
             self.send_commit_command_to_server()
 
     # ~~~~~~~~~~~~~~  MySQL  ~~~~~~~~~~~~~~~~
+
+    def connect_to_database_and_check_tables(self):
+        print("Checking the DB")  # debug
+        self.connect_to_database()
+        result = self.execute_query("SHOW TABLES LIKE 'game'")
+        self.transaction_in_progress = True
+        if not result:
+            self.create_table()
     
     def execute_query(self, query):
         self.cursor.execute(query)
@@ -181,10 +196,29 @@ class Client:
         )
         self.cursor = self.db.cursor()
 
+    def create_table(self):
+        try:
+            with open('game.sql', 'r') as file:
+                script = file.read()
+                print("Found table script: {}".format(script))
+            self.execute_query(script)
+            print("Table created successfully.")
+        except Error as e:
+            print(f"The error '{e}' occurred while creating the table.")
+
+    def start_transaction(self):
+        self.db.start_transaction()
+
+    def commit_transaction(self):
+        self.db.commit()
+    
+    def rollback_transaction(self):
+        self.db.rollback()
+
     # ~~~~~~~~~~~~~~  Main  ~~~~~~~~~~~~~~~~
     
     def main(self):
-        self.connect_to_database()
+        self.connect_to_database_and_check_tables()
         self.create_gui()
 
 if __name__ == '__main__':
