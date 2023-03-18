@@ -2,6 +2,7 @@
 Copyright: Essi Passoja
 """
 
+import re
 import socket
 import threading
 import mysql.connector
@@ -139,10 +140,10 @@ class Server:
     def connect_to_database(self):
         self.db = mysql.connector.connect(
             host = "mysql",
-            port="3306",
-            user="root",
-            password="root",
-            database="tictactoe_db"
+            port = "3306",
+            user = "root",
+            password = "root",
+            database = "tictactoe_db"
         )
         self.cursor = self.db.cursor()
 
@@ -167,11 +168,31 @@ class Server:
 
     # ~~~~~~~~~~~~  Game logic  ~~~~~~~~~~~~~~
 
+    @staticmethod
     def read_move_location(message):
-        pass
+        location_regex = re.compile(r".*?(\d), ?(\d).*")
+        match = location_regex.match(message)
+        return match.group(1), match.group(2)  # row, column
 
-    def check_game_status():
-        pass
+    def check_win(self):
+        for i in enumerate(len(self.game_board)):
+            if (self.game_board[i][0]
+                    == self.game_board[i][1]
+                    == self.game_board[i][2]):
+                return True
+            elif (self.game_board[0][i]
+                    == self.game_board[1][i]
+                    == self.game_board[2][i]):
+                return True
+        if (self.game_board[0][0]
+                == self.game_board[1][1]
+                == self.game_board[2][2]):
+            return True
+        if (self.game_board[0][2]
+                == self.game_board[1][1]
+                == self.game_board[2][0]):
+            return True
+        return False
 
     # ~~~~~~~~~~~~~~  Main  ~~~~~~~~~~~~~~~~
 

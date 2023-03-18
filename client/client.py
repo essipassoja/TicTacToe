@@ -174,10 +174,10 @@ class Client:
     def connect_to_database(self):
         self.db = mysql.connector.connect(
             host = "mysql",
-            port="3306",
-            user="root",
-            password="root",
-            database="tictactoe_db"
+            port = "3306",
+            user = "root",
+            password = "root",
+            database = "tictactoe_db"
         )
         self.cursor = self.db.cursor()
 
