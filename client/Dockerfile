@@ -15,6 +15,8 @@ EXPOSE 3306
 
 # Copy project files
 COPY client.py .
+COPY tictactoe.py .
+COPY /mysql/database.py .
 COPY /mysql/game.sql .
 COPY /graphics/tictactoe_background.png .
 COPY /graphics/tic.png .

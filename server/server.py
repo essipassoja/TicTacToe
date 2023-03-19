@@ -72,10 +72,7 @@ class Server:
         finally:
             print("Closing the connection.")
             connection.close()
-            try:
-                self.connections.remove(connection)
-            except ValueError:
-                print("Connection already removed from list.")
+            self.remove_connection_from_connections(connection)
 
     # ~~~~~~~~  Decice player marks  ~~~~~~~~~~~~
 
@@ -89,10 +86,7 @@ class Server:
             connection.send(message.encode())
             self.players.append("tac")
             self.game_started = True
-        try:
-            self.connections.remove(connection)
-        except ValueError:
-            print("Connection already removed from list.")
+        self.remove_connection_from_connections(connection)
 
     # ~~~~~~~~~~  2PC protocol  ~~~~~~~~~~~~~~
 
@@ -111,12 +105,15 @@ class Server:
             pass
         else:
             reply = bytes.decode(connection.recv(1024))
-            try:
-                self.connections.remove(connection)
-            except ValueError:
-                print("Connection already removed from list.")
+            self.remove_connection_from_connections(connection)
             print(reply)
             self.game_status.append(reply)
+
+    def remove_connection_from_connections(self, connection):
+        try:
+            self.connections.remove(connection)
+        except ValueError:
+            print("Connection already removed from list.")
     
     def prepare_phase(self):
         ok = self.check_if_move_can_be_made()
