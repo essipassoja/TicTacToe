@@ -10,7 +10,6 @@ PORT = 5000
 HOST = ""
 CLIENT_HOSTS = ["client1", "client2"]
 
-# https://stackoverflow.com/questions/57925492/how-to-listen-continuously-to-a-socket-for-data-in-python
 
 class Server:
     def __init__(self):
