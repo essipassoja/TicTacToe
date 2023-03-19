@@ -145,11 +145,21 @@ class Client:
             self.requested_board = None
         elif "Refusing" in message:
             self.requested_board = None
+    
+    def start_tester(self):
+        t = threading.Thread(target=self.tester, daemon=True)
+        t. start()
+
+    def tester(self):
+        if self.player == "o":
+            while True:
+                self.send_prepare_request_to_server((0, 0))
 
     # ~~~~~~~~~~~~~~  Main  ~~~~~~~~~~~~~~~~
     
     def main(self):
         self.db.connect_to_database_and_check_tables()
+        # self.start_tester()
         self.create_gui()
 
 
