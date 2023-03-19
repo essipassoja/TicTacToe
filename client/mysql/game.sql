@@ -1,7 +1,6 @@
 CREATE TABLE IF NOT EXISTS game (
-  game_id INT NOT NULL AUTO_INCREMENT,
-  player1 VARCHAR(255) NOT NULL,
-  player2 VARCHAR(255) NOT NULL,
-  game_state VARCHAR(255) NOT NULL,
-  PRIMARY KEY (game_id)
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  game_table TEXT,
+  game_status ENUM('Not started', 'On-going', 'Finished') DEFAULT 'Not started',
+  winner ENUM('None', 'tic', 'tac') DEFAULT 'None'
 );

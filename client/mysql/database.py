@@ -9,7 +9,7 @@ class DataBase:
     def connect_to_database_and_check_tables(self):
         print("Checking the DB")  # debug
         self.connect_to_database()
-        self.delete_table()  # debug
+        # self.delete_table()  # reset table
         result = self.execute_query("SHOW TABLES LIKE 'game'")
         if not result:
             self.create_table()
