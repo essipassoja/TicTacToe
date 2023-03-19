@@ -2,7 +2,6 @@
 Copyright: Essi Passoja
 """
 
-import re
 import socket
 import threading
 
