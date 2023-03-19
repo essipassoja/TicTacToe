@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS game (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  game_table JSON DEFAULT '[[" ", " ", " "], [" ", " ", " "], [" ", " ", " "]]',
-  winner ENUM('None', 'tic', 'tac') DEFAULT 'None'
+  game_id INT AUTO_INCREMENT PRIMARY KEY,
+  game_board TEXT,
+  winner ENUM('None', 'x', 'o') DEFAULT 'None'
 );

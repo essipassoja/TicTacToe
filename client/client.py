@@ -14,11 +14,15 @@ PORT = 5000
 class Client:
     def __init__(self):
         # Initialize attributes
-        self.tic = None
-        self.tac = None
+        self.x = None
+        self.o = None
         self.player = None
         self.socket = None
-        self.requested_move = None
+        self.requested_board = None
+        self.game_board = [[" ", " ", " "], 
+                           [" ", " ", " "], 
+                           [" ", " ", " "]]
+        self.update_ongoing = False
 
         # Initialize GUI
         self.root = Tk()
@@ -36,24 +40,34 @@ class Client:
     # ~~~~~~~~~~~~~~  Game GUI  ~~~~~~~~~~~~~~~~
 
     def create_gui(self):
-        canvas = Canvas(self.root)
-        canvas.pack(fill=BOTH, expand=1)
+        self.canvas = Canvas(self.root)
+        self.canvas.pack(fill=BOTH, expand=1)
         background = PhotoImage(file="tictactoe_background.png")
-        self.tic = PhotoImage(file="tic.png")
-        self.tac = PhotoImage(file="tac.png")
-        canvas.create_image(0, 0, anchor=NW, image=background)
+        self.x = PhotoImage(file="tic.png")
+        self.o = PhotoImage(file="tac.png")
+        self.canvas.create_image(0, 0, anchor=NW, image=background)
         self.root.wm_geometry("656x656")
-        canvas.bind("<Button-1>", self.handle_click)
+        self.canvas.bind("<Button-1>", self.handle_click)
         self.root.mainloop()
     
     def handle_click(self, event):
-        # canvas = event.widget
         x, y = tictactoe.check_click_and_return_image_coordinates(event.x, event.y)
-        if x != 0 and y != 0:
+        if x != 0 and y != 0:  # TODO add checks if the square is already marked
             location = tictactoe.coordinate_to_square_location((x, y))
+            self.requested_board = self.game_board
+            self.requested_board[location[0]][location[1]] = self.player
             self.send_prepare_request_to_server(location)
-            # TODO: canvas.create_image(x, y, anchor=NW, image=self.photo)
     
+    def update_gui(self):
+        # Go through all squares:
+        for row, _ in enumerate(self.game_board):
+            for column, _ in enumerate(self.game_board):
+                x, y = tictactoe.square_location_to_coordinates((row, column))
+                if self.game_board[row][column] == 'x':
+                    self.canvas.create_image(x, y, anchor=NW, image=self.x)
+                elif self.game_board[row][column] == 'o':
+                    self.canvas.create_image(x, y, anchor=NW, image=self.o)
+
     # ~~~~~~~~~~~  Server communication  ~~~~~~~~~~~~~
 
     @staticmethod
@@ -101,9 +115,11 @@ class Client:
     
     def handle_message(self, message):
         if "Request to prepare" in message:
-            self.requested_move = tuple(
-                tictactoe.parse_requested_move(message))
-            print("Requested move: {}".format(self.requested_move))
+            if " {} ".format(self.player) not in message:
+                self.requested_board = None 
+            if "update" in message:
+                self.update_ongoing = True
+            # print("Requested board: {}".format(self.requested_board))
             success = self.db.start_transaction()
             if not success:
                 self.send_message_to_server(
@@ -112,17 +128,30 @@ class Client:
                 self.send_message_to_server(
                     "Prepared", wait_response=False)
         elif message == "Request to commit":
+            if self.requested_board:
+                print("Adding mark to game board")
+                self.db.update_game_board(self.requested_board)
+            if self.update_ongoing:
+                self.game_board = self.db.get_game_board()
+                print("Got game board!! {}".format(self.game_board))
+                self.update_gui()
+                self.update_ongoing = False
             self.db.commit_transaction()
             self.send_commit_response_to_server()
+            self.requested_board = None
         elif message == "Request to abort":
             self.db.rollback_transaction()
             self.send_abort_response_to_server()
+            self.requested_board = None
+        elif "Refusing" in message:
+            self.requested_board = None
 
     # ~~~~~~~~~~~~~~  Main  ~~~~~~~~~~~~~~~~
     
     def main(self):
         self.db.connect_to_database_and_check_tables()
         self.create_gui()
+
 
 if __name__ == '__main__':
     client = Client()

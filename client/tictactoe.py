@@ -1,7 +1,7 @@
 import re
 
 def parse_requested_move(requested_move):
-    location_regex = re.compile(r".*?(tic|tac).*?(\d), ?(\d).*")
+    location_regex = re.compile(r".*?(x|o).*?(\d), ?(\d).*")
     match = location_regex.match(requested_move)
     return match.group(1), int(match.group(2)), int(match.group(3))
 
@@ -13,7 +13,7 @@ def check_if_move_can_be_made(game_board, requested_move):
 
 def add_move_to_game_board(game_board, requested_move):
     player, row, column = parse_requested_move(requested_move)
-    game_board[row][column] = "x" if "tic" in player else "o"
+    game_board[row][column] = player
     print(game_board)
     player_won = check_win(game_board)
     print("Player won: {}".format(player_won))
