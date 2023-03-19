@@ -6,7 +6,7 @@ import socket
 import threading
 from tkinter import *
 import mysql.connector
-from mysql.connector import Error
+from mysql.connector import Error, ProgrammingError
 
 HOST = "server"
 PORT = 5000
@@ -49,7 +49,7 @@ class Client:
         x, y = self.check_click_and_return_image_coordinates(event.x, event.y)
         if x != 0 and y != 0:
             location = self.coordinate_to_square_location((x, y))
-            self.send_prepare_command_to_server(location)
+            self.send_prepare_request_to_server(location)
             # TODO: canvas.create_image(x, y, anchor=NW, image=self.photo)
 
     @staticmethod
@@ -78,43 +78,43 @@ class Client:
     @staticmethod
     def coordinate_to_square_location(coordinates):
         if coordinates == (65, 135):
-            return 1, 1
+            return 0, 0
         elif coordinates == (270, 136):
-            return 1, 2
+            return 0, 1
         elif coordinates == (470, 134):
-            return 1, 3
+            return 0, 2
         elif coordinates == (65, 310):
-            return 2, 1
+            return 1, 0
         elif coordinates == (270, 309):
-            return 2, 2
+            return 1, 1
         elif coordinates == (470, 311):
-            return 2, 3
+            return 1, 2
         elif coordinates == (65, 475):
-            return 3, 1
+            return 2, 0
         elif coordinates == (270, 475):
-            return 3, 2
+            return 2, 1
         elif coordinates == (470, 475):
-            return 3, 3
+            return 2, 2
     
     @staticmethod
     def square_location_to_coordinates(location):
-        if location == (1, 1):
+        if location == (0, 0):
             return 65, 135
-        elif location == (1, 2):
+        elif location == (0, 1):
             return 270, 136
-        elif location == (1, 3):
+        elif location == (0, 2):
             return 470, 134
-        elif location == (2, 1):
+        elif location == (1, 0):
             return 65, 310
-        elif location == (2, 2):
+        elif location == (1, 1):
             return 270, 309
-        elif location == (2, 3):
+        elif location == (1, 2):
             return 470, 311
-        elif location == (3, 1):
+        elif location == (2, 0):
             return 65, 475
-        elif location == (3, 2):
+        elif location == (2, 1):
             return 270, 475
-        elif location == (3, 3):
+        elif location == (2, 2):
             return 470, 475
     
     # ~~~~~~~~~~~  Server communication  ~~~~~~~~~~~~~
@@ -142,18 +142,16 @@ class Client:
         player_role = self.send_message_to_server("Who am I?")
         self.player = player_role
 
-    def send_prepare_command_to_server(self, location):
-        if not self.transaction_in_progress:
-            self.start_transaction()
+    def send_prepare_request_to_server(self, location):
         self.send_message_to_server(
             "prepare {} -> {}".format(self.player, location), 
             wait_response=False)
     
-    def send_commit_command_to_server(self):
-        self.send_message_to_server("commit")
+    def send_commit_response_to_server(self):
+        self.send_message_to_server("Committed", wait_response=False)
 
-    def send_abort_command_to_server(self):
-        self.send_message_to_server("abort")
+    def send_abort_response_to_server(self):
+        self.send_message_to_server("Aborted", wait_response=False)
     
     def server_listener(self):
         self.socket = self.connect_to_server()
@@ -165,10 +163,20 @@ class Client:
                 self.handle_message(message)
     
     def handle_message(self, message):
-        if message == "Request to prepare":
-            self.send_message_to_server("Prepared", wait_response=False)
-        elif message == "prepared":
-            self.send_commit_command_to_server()
+        if "Request to prepare" in message:
+            success = self.start_transaction()
+            if not success:
+                self.send_message_to_server(
+                    "Not prepared", wait_response=False)
+            else:
+                self.send_message_to_server(
+                    "Prepared", wait_response=False)
+        elif message == "Request to commit":
+            self.commit_transaction()
+            self.send_commit_response_to_server()
+        elif message == "Request to abort":
+            self.rollback_transaction()
+            self.send_abort_response_to_server()
 
     # ~~~~~~~~~~~~~~  MySQL  ~~~~~~~~~~~~~~~~
 
@@ -179,6 +187,8 @@ class Client:
         self.transaction_in_progress = True
         if not result:
             self.create_table()
+        self.commit_transaction()
+        self.transaction_in_progress = False
     
     def execute_query(self, query):
         self.cursor.execute(query)
@@ -207,7 +217,11 @@ class Client:
             print(f"The error '{e}' occurred while creating the table.")
 
     def start_transaction(self):
-        self.db.start_transaction()
+        try:
+            self.db.start_transaction()
+        except ProgrammingError:
+            return False
+        return True
 
     def commit_transaction(self):
         self.db.commit()

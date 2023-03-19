@@ -18,7 +18,6 @@ class Server:
         self.db = None
         self.cursor = None
         self.connections = []
-        self.transaction_in_progress = False
 
         #Initialize game play attributes
         self.current_player = "tic"
@@ -28,6 +27,9 @@ class Server:
             [' ', ' ', ' '], 
             [' ', ' ', ' ']]
         self.players = []
+        # Game status follows the responses from clients, 
+        # for example ["Prepared", "Prepared"]
+        self.game_status = []
 
     # ~~~~~~~~  Client communication  ~~~~~~~~~~~~
 
@@ -50,22 +52,19 @@ class Server:
                 message = bytes.decode(connection.recv(1024))
                 if message:
                     print("Received a message: {}".format(message))
-                ### Phase 1 ###
+                # ~~~~ Start 2PC protocol ~~~~~~
                 if ("prepare" in message and 
                         self.current_player in message and 
                         len(self.players) == 2):
                     self.requested_move = message
-                    self.prepare_phase(connection)
+                    self.prepare_phase()
                 elif "prepare" in message:
                     # Game has not started or it's not the player's turn
                     connection.send("Refusing to make the move".encode())
-                ### Phase 2 ###
-                elif "commit" in message and len(self.players) == 2:
-                    self.commit_phase(connection)
-                    self.add_move_to_game_board()
-                elif "abort" in message and len(self.players) == 2:
-                    self.abort_phase(connection)
-                    self.requested_move = None
+                elif ("Prepared" in message or "Not Prepared" in message or 
+                      "Committed" in message or "Aborted" in message):
+                    self.game_status.append(message)
+                # ~~~~~~~~~~~~~~~~~~~~~~~~~~
                 elif "Who am I" in message:
                     self.send_player_info(connection)
         except BrokenPipeError:
@@ -73,7 +72,10 @@ class Server:
         finally:
             print("Closing the connection.")
             connection.close()
-            self.connections.remove(connection)
+            try:
+                self.connections.remove(connection)
+            except ValueError:
+                print("Connection already removed from list.")
 
     # ~~~~~~~~  Decice player marks  ~~~~~~~~~~~~
 
@@ -87,72 +89,117 @@ class Server:
             connection.send(message.encode())
             self.players.append("tac")
             self.game_started = True
+        try:
+            self.connections.remove(connection)
+        except ValueError:
+            print("Connection already removed from list.")
 
     # ~~~~~~~~~~  2PC protocol  ~~~~~~~~~~~~~~
 
-    def prepare_phase(self, connection):
-        message = "Request to prepare"
+    def send_message_to_both_clients(self, message):
         for connection in self.connections:
             t = threading.Thread(
                 target=self.send_message, 
                 args=(connection, message))
             t.start()
-    
+
     def send_message(self, connection, message):
         print("Sending a message {}".format(message))
-        connection.sendall(message.encode())
-        reply = bytes.decode(connection.recv(1024))
-        print(reply)
-
-    @staticmethod
-    def commit_phase(self, connection):
-        message = "Request to commit"
-        connection.sendall(message.encode())
-        reply = bytes.decode(connection.recv(1024))
-        if reply == "yes":
-            self.update_database()
-            message = "commit confirmed"
+        try:
             connection.sendall(message.encode())
+        except BrokenPipeError:
+            pass
         else:
-            message = "commit aborted"
-            connection.sendall(message.encode())
+            reply = bytes.decode(connection.recv(1024))
+            try:
+                self.connections.remove(connection)
+            except ValueError:
+                print("Connection already removed from list.")
+            print(reply)
+            self.game_status.append(reply)
+    
+    def prepare_phase(self):
+        ok = self.check_if_move_can_be_made()
+        if not ok:
+            print("Cannot make move, the square is already taken")
+            return
+        message = "Request to {}".format(self.requested_move)
+        self.send_message_to_both_clients(message)
+        while True:
+            if self.game_status.count("Prepared") == 2:
+                self.game_status = []
+                self.commit_phase()
+                break
+            elif ((self.game_status.count("Prepared") + 
+                    self.game_status.count("Not prepared")) == 2
+                    and self.game_status.count("Prepared") != 2):
+                self.game_status = []
+                self.abort_phase()
+                break
 
-    @staticmethod
-    def abort_phase(connection):
-        message = "abort confirmed"
-        connection.sendall(message.encode())
+    def commit_phase(self):
+        message = "Request to commit"
+        self.send_message_to_both_clients(message)
+        while True:
+            if self.game_status.count("Committed") == 2:
+                print("Both committed")
+                self.game_status = []
+                self.add_move_to_game_board()
+                break
 
-    def update_database(self):
-        pass
+    def abort_phase(self):
+        message = "Request to abort"
+        self.send_message_to_both_clients(message)
+        while True:
+            if self.game_status.count("Aborted") == 2:
+                print("Both aborted")
+                self.game_status = []
+                break
 
     # ~~~~~~~~~~~~  Game logic  ~~~~~~~~~~~~~~
 
-    def add_move_to_game_board(self):
+    def get_location(self):
         location_regex = re.compile(r".*?(\d), ?(\d).*")
         match = location_regex.match(self.requested_move)
-        row = match.group(1)
-        column = match.group(2)
+        return int(match.group(1)), int(match.group(2))
+    
+    def check_if_move_can_be_made(self):
+        row, column = self.get_location()
+        if self.game_board[row][column] == " ":
+            return True
+        return False
+    
+    def add_move_to_game_board(self):
+        row, column = self.get_location()
         self.game_board[row][column] = ("x" if "tic" in self.current_player 
                                         else "o")
         print(self.game_board)
+        player_won = self.check_win()
+        print("Player won: {}".format(player_won))
+        self.current_player = "tic" if self.current_player == "tac" else "tac"
 
     def check_win(self):
-        for i in enumerate(len(self.game_board)):
-            if (self.game_board[i][0]
+        print("Checking win")
+        for i, _ in enumerate(self.game_board):
+            if ((self.game_board[i][0]
                     == self.game_board[i][1]
-                    == self.game_board[i][2]):
+                    == self.game_board[i][2])
+                    and self.game_board[i][0] != " "):
                 return True
-            elif (self.game_board[0][i]
+            elif ((self.game_board[0][i]
                     == self.game_board[1][i]
-                    == self.game_board[2][i]):
+                    == self.game_board[2][i])
+                    and self.game_board[0][i] != " "):
                 return True
-        if (self.game_board[0][0]
+        if ((self.game_board[0][0]
                 == self.game_board[1][1]
-                == self.game_board[2][2]):
+                == self.game_board[2][2])
+                and self.game_board[0][0] != " "):
             return True
-        if (self.game_board[0][2]
+        if ((self.game_board[0][2]
                 == self.game_board[1][1]
-                == self.game_board[2][0]):
+                == self.game_board[2][0]) 
+                and self.game_board[0][2] != " "):
             return True
         return False
 
