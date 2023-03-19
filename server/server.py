@@ -20,6 +20,7 @@ class Server:
         self.connections = []
         self.game_board_update_required = False
         self.request_ongoing = False
+        self.message_counter = 0
 
         #Initialize game play attributes
         self.current_player = "x"
@@ -50,6 +51,8 @@ class Server:
                 message = bytes.decode(connection.recv(1024))
                 if message:
                     print("Received a message: {}".format(message))
+                    self.message_counter += 1
+                    print("Traffic: {} messages".format(self.message_counter))
                 # ~~~~ Start 2PC protocol ~~~~~~
                     if ("prepare" in message and 
                             " {} ".format(self.current_player) in message and 
@@ -85,11 +88,10 @@ class Server:
     def send_message(self, connection, message):
         try:
             connection.sendall(message.encode())
+            self.message_counter += 1
+            print("Traffic: {} messages".format(self.message_counter))
         except BrokenPipeError:
             self.remove_connection_from_connections(connection)
-        # else:
-        #     reply = bytes.decode(connection.recv(1024))
-        #     print(reply)
 
     def remove_connection_from_connections(self, connection):
         try:
@@ -103,10 +105,14 @@ class Server:
         if not self.players:
             message = "x"
             connection.send(message.encode())
+            self.message_counter += 1
+            print("Traffic: {} messages".format(self.message_counter))
             self.players.append("x")
         else:
             message = "o"
             connection.send(message.encode())
+            self.message_counter += 1
+            print("Traffic: {} messages".format(self.message_counter))
             self.players.append("o")
             self.game_started = True
         self.remove_connection_from_connections(connection)
