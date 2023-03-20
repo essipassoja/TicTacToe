@@ -151,6 +151,7 @@ class Client:
         t. start()
 
     def tester(self):
+        # High payload testing (can also be turned on for both players by removing the if statement.)
         if self.player == "o":
             while True:
                 self.send_prepare_request_to_server((0, 0))
@@ -159,6 +160,7 @@ class Client:
     
     def main(self):
         self.db.connect_to_database_and_check_tables()
+        # Turn on the high payload testing by uncommenting self.start_tester()
         # self.start_tester()
         self.create_gui()
 
